@@ -14,6 +14,8 @@ import MiscGenerator from "@/components/generators/MiscGenerator";
 import ImageGenerator from "@/components/generators/ImageGenerator";
 import ApiResponseGenerator from "@/components/generators/ApiResponseGenerator";
 import SqlInsertGenerator from "@/components/generators/SqlInsertGenerator";
+import CreditCardGenerator from "@/components/generators/CreditCardGenerator";
+import EmailGenerator from "@/components/generators/EmailGenerator";
 
 export default function Home() {
   const theme = useAppStore((s) => s.theme);
@@ -32,6 +34,8 @@ export default function Home() {
           <ProductGenerator />
           <BlogGenerator />
           <AddressGenerator />
+          <CreditCardGenerator />
+          <EmailGenerator />
           <MiscGenerator />
           <ApiResponseGenerator />
           <SqlInsertGenerator />

@@ -175,6 +175,113 @@ export function generateMisc(count: number, type: MiscType, seed?: number, min =
   return results;
 }
 
+// --- Credit Card Numbers ---
+export interface CreditCard {
+  number: string;
+  type: string;
+  expiry: string;
+  cvv: string;
+  holder: string;
+}
+
+const CARD_PREFIXES: Record<string, string[]> = {
+  'Visa': ['4'],
+  'Mastercard': ['51', '52', '53', '54', '55'],
+  'American Express': ['34', '37'],
+  'Discover': ['6011', '65'],
+  'JCB': ['35'],
+};
+
+function luhnChecksum(numStr: string): string {
+  const digits = numStr.split('').map(Number);
+  let sum = 0;
+  let alt = true;
+  for (let i = digits.length - 1; i >= 0; i--) {
+    let d = digits[i];
+    if (alt) {
+      d *= 2;
+      if (d > 9) d -= 9;
+    }
+    sum += d;
+    alt = !alt;
+  }
+  return ((10 - (sum % 10)) % 10).toString();
+}
+
+export function generateCreditCards(count: number, seed?: number): CreditCard[] {
+  const rng = createRandom(seed);
+  const cards: CreditCard[] = [];
+  const types = Object.keys(CARD_PREFIXES);
+
+  for (let i = 0; i < count; i++) {
+    const type = rng.pick(types);
+    const prefix = rng.pick(CARD_PREFIXES[type]);
+    const length = type === 'American Express' ? 15 : 16;
+    let num = prefix;
+    while (num.length < length - 1) {
+      num += rng.int(0, 9).toString();
+    }
+    num += luhnChecksum(num);
+
+    const month = rng.int(1, 12).toString().padStart(2, '0');
+    const year = rng.int(25, 30).toString();
+    const cvvLen = type === 'American Express' ? 4 : 3;
+    let cvv = '';
+    for (let j = 0; j < cvvLen; j++) cvv += rng.int(0, 9).toString();
+
+    cards.push({
+      number: num,
+      type,
+      expiry: `${month}/${year}`,
+      cvv,
+      holder: `${rng.pick(FIRST_NAMES)} ${rng.pick(LAST_NAMES)}`,
+    });
+  }
+  return cards;
+}
+
+// --- Email Addresses ---
+export interface GeneratedEmail {
+  email: string;
+  name: string;
+  provider: string;
+}
+
+const EMAIL_PROVIDERS = [
+  'gmail.com', 'yahoo.com', 'outlook.com', 'protonmail.com', 'icloud.com',
+  'hotmail.com', 'aol.com', 'fastmail.com', 'zoho.com', 'mail.com',
+];
+
+const EMAIL_PATTERNS = [
+  (first: string, last: string) => `${first}.${last}`,
+  (first: string, last: string) => `${first}${last}`,
+  (first: string, last: string) => `${first[0]}${last}`,
+  (first: string, last: string, rng: SeededRandom) => `${first}.${last}${rng.int(1, 999)}`,
+  (first: string, last: string, rng: SeededRandom) => `${first}${rng.int(10, 99)}`,
+  (first: string, _last: string) => `${first}_dev`,
+  (first: string, last: string) => `${last}.${first}`,
+];
+
+export function generateEmails(count: number, seed?: number): GeneratedEmail[] {
+  const rng = createRandom(seed);
+  const emails: GeneratedEmail[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const first = rng.pick(FIRST_NAMES).toLowerCase();
+    const last = rng.pick(LAST_NAMES).toLowerCase();
+    const provider = rng.pick(EMAIL_PROVIDERS);
+    const pattern = rng.pick(EMAIL_PATTERNS);
+    const local = pattern(first, last, rng);
+
+    emails.push({
+      email: `${local}@${provider}`,
+      name: `${first[0].toUpperCase() + first.slice(1)} ${last[0].toUpperCase() + last.slice(1)}`,
+      provider,
+    });
+  }
+  return emails;
+}
+
 // --- Placeholder Images ---
 export function generatePlaceholderImage(
   width: number,
