@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Database } from "lucide-react";
 import GeneratorCard from "../GeneratorCard";
-import OutputBox from "../OutputBox";
+import CopyButton from "../CopyButton";
 import { NumberInput, SeedInput, SelectInput, GenerateButton } from "../Controls";
 import { createRandom } from "@/lib/random";
 import {
@@ -89,6 +89,96 @@ function generateSqlInserts(table: TableType, count: number, seed?: number): str
   return statements.join("\n");
 }
 
+const SQL_KEYWORDS = new Set([
+  "INSERT", "INTO", "VALUES", "CREATE", "TABLE", "PRIMARY", "KEY",
+  "INT", "VARCHAR", "DECIMAL", "BOOLEAN", "TIMESTAMP", "TEXT", "DATE",
+  "TRUE", "FALSE",
+]);
+
+function highlightSQL(sql: string) {
+  return sql.split("\n").map((line, lineIdx) => {
+    if (line.startsWith("--")) {
+      return (
+        <div key={lineIdx} className="text-gray-400 dark:text-gray-500 italic">
+          {line}
+        </div>
+      );
+    }
+    if (!line.trim()) return <div key={lineIdx}>&nbsp;</div>;
+
+    // Tokenize: keywords, strings, numbers, parens, rest
+    const tokens: { type: string; value: string }[] = [];
+    let remaining = line;
+
+    while (remaining.length > 0) {
+      // Whitespace
+      const wsMatch = remaining.match(/^(\s+)/);
+      if (wsMatch) {
+        tokens.push({ type: "ws", value: wsMatch[1] });
+        remaining = remaining.slice(wsMatch[1].length);
+        continue;
+      }
+      // String literal
+      if (remaining[0] === "'") {
+        let end = 1;
+        while (end < remaining.length) {
+          if (remaining[end] === "'" && remaining[end + 1] === "'") {
+            end += 2;
+          } else if (remaining[end] === "'") {
+            end++;
+            break;
+          } else {
+            end++;
+          }
+        }
+        tokens.push({ type: "string", value: remaining.slice(0, end) });
+        remaining = remaining.slice(end);
+        continue;
+      }
+      // Number
+      const numMatch = remaining.match(/^(\d+\.?\d*)/);
+      if (numMatch && (tokens.length === 0 || tokens[tokens.length - 1].type !== "word")) {
+        tokens.push({ type: "number", value: numMatch[1] });
+        remaining = remaining.slice(numMatch[1].length);
+        continue;
+      }
+      // Word
+      const wordMatch = remaining.match(/^([A-Za-z_]\w*)/);
+      if (wordMatch) {
+        const word = wordMatch[1];
+        const isKeyword = SQL_KEYWORDS.has(word.toUpperCase());
+        tokens.push({ type: isKeyword ? "keyword" : "ident", value: word });
+        remaining = remaining.slice(word.length);
+        continue;
+      }
+      // Parens and punctuation
+      tokens.push({ type: "punct", value: remaining[0] });
+      remaining = remaining.slice(1);
+    }
+
+    return (
+      <div key={lineIdx} className="whitespace-pre-wrap break-words">
+        {tokens.map((token, i) => {
+          switch (token.type) {
+            case "keyword":
+              return <span key={i} className="text-blue-400 dark:text-blue-400 font-bold">{token.value}</span>;
+            case "string":
+              return <span key={i} className="text-emerald-500 dark:text-emerald-400">{token.value}</span>;
+            case "number":
+              return <span key={i} className="text-amber-400 dark:text-amber-300">{token.value}</span>;
+            case "punct":
+              return <span key={i} className="text-gray-400 dark:text-gray-500">{token.value}</span>;
+            case "ident":
+              return <span key={i} className="text-purple-400 dark:text-purple-300">{token.value}</span>;
+            default:
+              return <span key={i}>{token.value}</span>;
+          }
+        })}
+      </div>
+    );
+  });
+}
+
 export default function SqlInsertGenerator() {
   const [count, setCount] = useState(5);
   const [table, setTable] = useState<TableType>("users");
@@ -100,6 +190,13 @@ export default function SqlInsertGenerator() {
     setOutput(generateSqlInserts(table, count, s));
   };
 
+  const tableDescriptions: Record<TableType, string> = {
+    users: "id, name, email, city, country, is_active, created_at",
+    products: "id, name, price, category, sku, in_stock",
+    orders: "id, user_id, total, status, items_count, ordered_at",
+    posts: "id, user_id, title, body, likes, published_at",
+  };
+
   return (
     <GeneratorCard title="SQL INSERT Statements" icon={<Database size={20} />}>
       <div className="flex flex-wrap items-end gap-3 mb-2">
@@ -109,16 +206,39 @@ export default function SqlInsertGenerator() {
           value={table}
           onChange={setTable}
           options={[
-            { value: "users", label: "users" },
-            { value: "products", label: "products" },
-            { value: "orders", label: "orders" },
-            { value: "posts", label: "posts" },
+            { value: "users", label: "👤 users" },
+            { value: "products", label: "📦 products" },
+            { value: "orders", label: "🛒 orders" },
+            { value: "posts", label: "📝 posts" },
           ]}
         />
         <SeedInput seed={seed} onChange={setSeed} />
         <GenerateButton onClick={generate} />
       </div>
-      <OutputBox content={output} generator="SQL INSERT" label={`${count} ${table} rows`} />
+
+      {/* Schema hint */}
+      <div className="mb-3 px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700">
+        <span className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500">Schema: </span>
+        <span className="text-xs font-mono text-gray-600 dark:text-gray-400">{tableDescriptions[table]}</span>
+      </div>
+
+      {/* Syntax-highlighted output */}
+      {output && (
+        <div className="mt-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+              Output · SQL
+            </span>
+            <CopyButton text={output} label={`${count} ${table} rows`} generator="SQL INSERT" />
+          </div>
+          <pre
+            className="p-4 rounded-xl bg-gray-950 dark:bg-gray-950 border border-gray-200
+              dark:border-gray-700 text-sm leading-relaxed overflow-auto max-h-80 font-mono"
+          >
+            {highlightSQL(output)}
+          </pre>
+        </div>
+      )}
     </GeneratorCard>
   );
 }
